@@ -40,7 +40,40 @@ Function Get-UnityItemByKey {
         $request = Send-UnityRequest -uri $URL -Session $Session -Method 'GET'
 
         #Formating the result. Converting it from JSON to a Powershell object
-        $Results = ($request.content | ConvertFrom-Json).entries.content
+        $Results = @()
+        $Results += ($request.content | ConvertFrom-Json).entries.content
+        
+        Write-Debug -Message "Results Count: $($Results.Count)"
+        if (($Results.Count % 2000) -eq 0)
+        {
+            Write-Debug -Message "More than 2000 results, querying additional records"
+            $page = 2
+            DO
+            {
+                $pageURI = $URL + "&page=" + $page
+                Write-Debug -Message "Page URI: $($PageURI)"
+                
+                #Sending the request
+                $request = Send-UnityRequest -uri $pageURI -Session $Session -Method 'GET'
+                
+                #Formating the result. Converting it from JSON to a Powershell object
+                $RequestResults = ($request.content | ConvertFrom-Json).entries.content
+                
+                #Check if request results are empty before adding to results and break loop if no results are returned
+                if ($RequestResults)
+	            {
+	                $Results += $RequestResults
+	            } else
+                {
+                    Write-Debug -Message "No results from this call, breaking loop"
+                    break
+                }
+                
+                Write-Debug -Message "Results Count: $($Results.Count)"
+                
+                $page++
+            } while (($Results.Count % 2000) -eq 0)
+        }
 
         #Building the result collection (Add ressource type)
         If ($Results) {
@@ -58,7 +91,7 @@ Function Get-UnityItemByKey {
 
                 Foreach ($Result in $ResultsFiltered) {
 
-                    # Instantiate and output object
+                    # Instantiate and output object if not null
                     New-UnityObject -TypeName $TypeName -Data $Result
 
                 } # End Foreach ($Result in $ResultsFiltered)
